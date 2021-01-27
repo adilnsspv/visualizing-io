@@ -1,0 +1,298 @@
+---
+title: "P1"
+author: "ADIL NUSSIPOV"
+date: "1/26/2021"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(data.table)
+
+
+## loading data
+
+io_access <- fread("tna.csv") ## dataset of access estimates of IOs
+io_policy <- read_dta("policy.dta") ##dataset with policy portfolios of IOs
+io_authority <- read_dta("mia.dta") ## dataset with authority scores of IOs
+
+## joining data
+
+## to join io_access and io_authority, we need to have common keys 
+## These datasets have used different ways of coding IOs IDs
+
+
+
+data1 <- io_access %>%
+  rename(year = Year) %>%
+  mutate(IO = as_factor(IO),
+         access = lav_rdcc) %>%
+  mutate(ionumber = case_when(IO == "CAN" ~ 330,
+                              IO == "AMU" ~ 470,
+                              IO == "APEC" ~ 650,
+                              IO == "ASEAN"~ 750,
+                              IO == "BIS" ~ 810, 
+                              IO == "CARICOM" ~ 880, 
+                              IO == "COMW" ~ 1240, 
+                              IO == "CEMAC" ~ 1260, 
+                              IO == "CoE" ~ 1390,
+                              IO == "EFTA" ~ 1670,
+                              IO == "IGAD" ~ 2230,
+                              IO == "WB" ~ 2400,
+                              IO == "NAFO" ~ 2572,
+                              IO == "IMF" ~ 2880,
+                              IO == "ICC" ~ 2702,
+                              IO == "IWC" ~ 3250,  
+                              IO == "NC" ~ 3590,   
+                              IO == "NAFTA" ~ 3670,  
+                              IO == "NATO" ~ 3700,  
+                              IO == "OECD" ~ 3750,  
+                              IO == "AU" ~ 3760, 
+                              IO == "OSCE" ~ 3770, 
+                              IO == "OAPEC" ~ 3800,
+                              IO == "OIC" ~ 3850,
+                              IO == "OAS" ~ 3900,
+                              IO == "PIF" ~ 4200,
+                              IO == "UN" ~ 4400,
+                              IO == "WTO" ~ 4580,
+                              IO == "SCO" ~ 5550, 
+                              TRUE ~ 0000000)) %>%
+  inner_join(io_authority, by = c("year" = "year", 
+                         "ionumber" = "ionumber")) %>%
+  select(!c("IDcase","ln_TNA_reg","lav2rdcc","lav3rdcc","l3_part_disc"))
+
+
+## io_access and io_authority joined, now we need to join them with io_policy
+
+data <- io_policy %>%
+  mutate(ioname = fct_recode(ioname, "NordC" = "Nordic")) %>%
+  pivot_longer(agriculture:datacollect, 
+               names_to = "policy_issue",
+               values_to = "involvement") %>% ##gathering policy areas into one var
+  mutate(policy_level = case_when(involvement == 2 ~ "core",
+                                  involvement == 1 ~ "flank", 
+                                  TRUE ~ "NA")) %>%
+  select(-(doclength:SCOPE_AGGR)) %>%
+  mutate(policy_level = as_factor(policy_level),
+         policy_issue = as_factor(policy_issue)) %>%
+  inner_join(data1, by = c("ionumber" = "ionumber", 
+                                  "year" = "year", 
+                                  "ioname" = "ioname")) %>% ## joining with data1
+  select(-(COMPONENTS:DS_sum2),
+         -(delaccess:poolfinal)) %>%
+  select(-c(acronym.x, acronym.y, io, io2, inception.x, inception.y, initial.x, initial.y, end.x, end.y, contract.y, DIMENSIONS, typeI.y))
+
+
+## some more cleaning and removing unnecessary data
+
+data <- data %>% 
+  filter(policy_level == "core") %>% ## leaving only policy areas in which IOs specialize, removing their non-priority policy areas
+  mutate(policy_issue = fct_recode(policy_issue,  ##renaming policy areas for graphs
+                                   "Finance & Banking" = "currency_bank",
+                                   "Finance & Banking" = "finstability",
+                                   "Health, Food & Environment" = "health",
+                                   "Health, Food & Environment" = "environment",
+                                   "Culture & Education" = "culture",
+                                   "Culture & Education" = "education",
+                                   "Humanitarian Aid" = "humanaid",
+                                   "Migration" = "migration",
+                                   "Regional Development" = "regionaldev",
+                                   "Foreign Affairs" = "foreign",
+                                   "Security" = "military",
+                                   "Human Rights" = "humanrights",
+                                   "Trade" = "trade",
+                                   "Development" = "development",
+                                   "Energy" = "energy",
+                                   "Economy" = "competition",
+                                   "Justice" = "justice",
+                                   "Economy" = "industry",
+                                   "Economy" = "taxation",
+                                   "Agriculture" = "agriculture",
+                                   "Economy" = "transport",
+                                   "Research" = "research",
+                                   "Social Policy" = "welfare",
+                                   "Telecommunications" = "telecom",
+                                   "Fisheries" = "fisheries"))
+
+
+```
+
+
+
+## Human Rights IOs are More Open Towards Transnational Actors
+
+```{r}
+
+data %>%
+  filter(year == 2010) %>% ## 2010 is latest year in the resulted dataset
+  group_by(policy_issue,) %>%
+  summarize(access = mean(access)) %>%
+  ungroup() %>%
+  mutate(policy_issue = fct_reorder(policy_issue, -access)) %>%
+  ggplot(aes(policy_issue, access)) +
+  geom_segment(aes(x=policy_issue, 
+                   xend=policy_issue, 
+                   y=0, 
+                   yend=access),
+                   color = "#084C61",
+                    size = 1) + 
+        labs(title="Lollipop Chart",
+             subtitle="Make Vs Avg. Mileage") + 
+  geom_point(size = 5, color = "#db504a") +
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Human rights IOs are more open",
+       subtitle = "International banking and energy IOs being least open in 2010",
+       x = " ",
+       y = " ",
+       fill = " ") +
+  ggthemes::theme_fivethirtyeight() +
+   theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none",
+  plot.title = element_text( color = "#084C61",
+                            size=28,
+                            face = "bold"),
+   plot.subtitle = ggplot2::element_text(family="Arial", size=16))
+
+```
+
+
+## ICC and OAS take the lead - but why?
+```{r}
+
+data %>%
+  filter(year == 2010) %>% ## 2010 is latest year in the resulted dataset
+  group_by(ioname) %>%
+  summarize(access = mean(access)) %>%
+  ungroup() %>%
+  mutate(ioname = fct_reorder(ioname, -access)) %>%
+  ggplot(aes(ioname, access)) +
+  geom_segment(aes(x=ioname, 
+                   xend=ioname, 
+                   y=0, 
+                   yend=access),
+                   color = "#084C61",
+                    size = 1) + 
+        labs(title="Lollipop Chart",
+             subtitle="Make Vs Avg. Mileage") + 
+  geom_point(size = 5, color = "#db504a") +
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "ICC and OAS take the lead",
+       subtitle = " Level of access provision to transnational actors among 29 IOs in 2010",
+       x = " ",
+       y = " ",
+       color = " ") +
+  ggthemes::theme_fivethirtyeight() +
+   theme(axis.text.x = element_text(angle = 45, hjust = 1),
+  plot.title = element_text( color = "#084C61",
+                            size=28,
+                            face = "bold"),
+   plot.subtitle = ggplot2::element_text(family="Arial", size=16))
+
+
+
+
+```
+
+## IOs Became More Open Towards Transnational Actors
+```{r}
+
+data1 %>%
+  pivot_longer(cols = c(access, delegation),
+               names_to = "type",
+               values_to = "value") %>%
+  group_by(year, type) %>%
+  summarize(value = mean(value)) %>%
+  ggplot(aes(year, value, color = type)) +
+  geom_line(size = 2) +
+  geom_vline(xintercept = 1991, color = "black", size = 1) +
+  geom_label(aes(x = 2000, y = 0.25, label = "1991 - the end of Cold War"), 
+             hjust = 0, 
+             vjust = 0.5, 
+             colour = "black", 
+             family = "Arial",
+             size = 4,
+             fill = NA, 
+             label.size = NA) +
+  geom_curve(aes(x = 2000, y = 0.25, xend = 1992, yend = 0.21), 
+             colour = "#555555", 
+             curvature = -0.2,
+             arrow = arrow(length = unit(0.01, "npc"))) +
+  scale_x_continuous(breaks = c(1950, 1960, 1970, 1980, 1990, 2000, 2010)) +
+  labs(title = "International organizations became more open",
+       subtitle = "With period after 1991 seeing the highest rise in access levels",
+       x = " ",
+       y = "Access",
+       color = " ") +
+  expand_limits(y = 0) +
+  ggthemes::theme_fivethirtyeight() +
+  scale_color_manual(values = c("#DB504A", "#084C61"),
+                     labels = c("Access", "Delegation")) +
+  theme(
+  plot.title = element_text( color = "#084C61",
+                            size=28,
+                            face = "bold"),
+   plot.subtitle = ggplot2::element_text(size=16))
+  
+  
+```
+
+
+## Human rights IOs historically have been most open
+```{r}
+
+# Historical line
+data %>%
+  group_by(policy_issue, year) %>%
+  summarize(access = mean(access)) %>%
+  ggplot(aes(year, access)) +
+  geom_line(color = "#084C61") +
+  geom_vline(xintercept = 1991, color = "black") +
+  scale_x_continuous(breaks = c(1950, 1960, 1970, 1980, 1990, 2000, 2010)) +
+  facet_wrap(~ policy_issue) +
+  labs(title = "Which Global Policy Issues Became More Open",
+       subtitle = "Human rights IOs historically have been most open",
+       x = " ",
+       y = "Access") +
+   ggthemes::theme_fivethirtyeight() +
+  scale_color_manual(values = c("#DB504A", "#084C61"),
+                     labels = c("Access", "Delegation")) +
+  theme(
+  plot.title = element_text( color = "#084C61",
+                            size=28,
+                            face = "bold"),
+   plot.subtitle = ggplot2::element_text(size=16))
+```
+
+More international organizations focus on trade
+```{r}
+
+data %>% 
+  filter(year == 2010,
+         policy_level != "NA",
+         policy_level == "core") %>% 
+  mutate(policy_issue = as_factor(policy_issue)) %>%
+  group_by(policy_issue) %>%
+  summarize(total_number = n_distinct(ioname)) %>%
+  ungroup() %>%
+  mutate(policy_issue = fct_reorder(policy_issue, total_number))%>%
+  ggplot(aes(policy_issue, total_number)) +
+  geom_hline(yintercept = 0, size = 1, colour="#edf2f4") +
+  coord_flip() +
+  geom_col(fill = "#084C61") +
+  labs(title = "More international organizations focus on trade",
+       subtitle = "Than on health and environment",
+       x = " ",
+       y = "") +
+ ggthemes::theme_fivethirtyeight() +
+  scale_y_continuous(breaks = seq(5, 30, by = 5)) +
+  theme(
+  plot.title = element_text( color = "#084C61",
+                            size=28,
+                            face = "bold"),
+   plot.subtitle = ggplot2::element_text(size=16))
+
+
+```
+
