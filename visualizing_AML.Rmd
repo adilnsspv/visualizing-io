@@ -1,0 +1,497 @@
+---
+title: "AML Policy"
+author: "ADIL NUSSIPOV"
+date: "2/8/2021"
+output: html_document
+---
+
+```{r}
+library(readxl)
+library(tidyverse)
+library(tidytext)
+library(haven)
+library(countrycode)
+library(ggthemes)
+library(WDI)
+library(wbstats)
+library(ggthemes)
+
+load("data2.Rdata")
+
+
+```
+
+
+```{r}
+excel_sheets('dataset.xls')
+
+d2012 <- read_excel("dataset.xls", sheet = "2012",
+                    col_names = c("country", "index", "rank"))
+d2013 <- read_excel("dataset.xls", sheet = "2013",
+                    col_names = c("country", "index", "rank"))
+d2014<- read_excel("dataset.xls", sheet = "2014",
+                    col_names = c("country", "index", "rank"))
+d2015<- read_excel("dataset.xls", sheet = "2015",
+                    col_names = c("country", "index", "rank"))
+d2016<- read_excel("dataset.xls", sheet = "2016",
+                    col_names = c("country", "index", "rank"))
+d2017<- read_excel("dataset.xls", sheet = "2017",
+                    col_names = c("country", "index", "rank"))
+d2018<- read_excel("dataset.xls", sheet = "2018",
+                    col_names = c("country", "index", "rank"))
+d2019<- read_excel("dataset.xls", sheet = "2019",
+                    col_names = c("country", "rank", "index", "iso_code", "iso3",
+                                  "region", "income"))
+d2020<- read_excel("dataset.xls", sheet = "2020",
+                    col_names = c("country", "rank", "index",
+                                  "iso_code", "iso3",
+                                  "region", "income"))
+
+
+d2012 <- d2012 %>%
+          slice(-(1:3)) %>%
+  mutate(year = 2012,
+         country = str_replace(country, "\\*", "")) %>%
+  select(-rank)
+
+d2013 <- d2013 %>%
+          slice(-(1:3)) %>%
+  mutate(year = 2013,
+         country = str_replace(country, "\\*", "")) %>%
+  select(-rank)
+
+d2014 <- d2014 %>%
+          slice(-(1:3)) %>%
+  mutate(year = 2014,
+         country = str_replace(country, "\\*", "")) %>%
+  select(-rank)
+
+d2015 <- d2015 %>%
+          slice(-(1:3)) %>%
+  slice(1:(n()-2)) %>%
+  mutate(year = 2015,
+         country = str_replace(country, "\\*", "")) %>%
+  select(-rank)
+
+d2016 <- d2016 %>%
+          slice(-(1:3)) %>%
+  slice(1:(n()-2)) %>%
+  mutate(year = 2016,
+         country = str_replace(country, "\\*", "")) %>%
+  select(-rank)
+
+d2017 <- d2017 %>%
+          slice(-(1:3)) %>%
+  slice(1:(n()-3)) %>%
+  mutate(year = 2017,
+         country = str_replace(country, "\\*", "")) %>%
+  select(-rank)
+
+d2018 <- d2018 %>%
+          slice(-1) %>%
+  mutate(year = 2018,
+         country = str_replace(country, "\\*", "")) %>%
+  select(-rank)
+
+
+d2019 <- d2019 %>%
+           slice(-1) %>%
+  mutate(year = 2019,
+         country = str_replace(country, "\\*", "")) %>%
+  select(-c(rank, iso3, iso_code, region, income))
+
+d2020 <- d2020 %>%
+          slice(1:(n()-2)) %>%
+           slice(-1) %>%
+  mutate(year = 2020,
+         country = str_replace(country, "\\*", "")) %>%
+  select(-c(rank, iso3, iso_code, region, income))
+
+
+
+```
+
+```{r}
+
+## joining all together
+
+data <- d2012 %>%
+        rbind(d2013, d2014, d2015, d2016, d2017, d2018, d2019, d2020) %>%
+        mutate(country = str_to_lower(country))
+
+complete_aml <- data %>%
+                complete(country, year) %>%
+                group_by(country) %>%
+                fill(index, .direction = "downup") %>%
+                mutate(code = countrycode(country, 
+                                             origin = 'country.name', 
+                                             destination = 'iso3c')) %>%
+                filter(!is.na(code)) %>%
+                mutate(region = countrycode(code, origin = "iso3c",
+                               destination = "region"),
+                     aml_index = as.numeric(index)) %>%
+                select(-index) %>%
+                mutate(country = str_to_title(country))
+
+
+save(complete_aml, file = "data2.Rdata")
+
+
+
+
+
+```
+
+```{r}
+
+    complete_aml %>%
+    ggplot(aes(aml_index)) +
+    geom_histogram() +
+    ggthemes::theme_fivethirtyeight() +
+ 
+    labs(title = "Countries with highest AML risk, 2012-2020",
+         subtitle = "Developing world takes the lead, \n developed - absent") +
+     theme(legend.position = "none",
+           plot.background = element_blank(),    # Background of the entire plot
+    panel.background = element_blank(),
+    strip.background =element_blank(),
+           axis.text.x = element_text(face = "bold"),
+           text = element_text(family = "Georgia", color = "black", size = 18),
+    plot.title = element_text(family="Georgia",
+                              color = "#db504a",
+                              size=12,
+                              face = "bold",
+                              hjust = 0.5),
+     plot.subtitle = ggplot2::element_text(family="Georgia", 
+                                           size=20,
+                                           hjust = 0.5))
+
+
+```
+
+
+
+```{r}
+## PLOT 1
+
+p1 <- complete_aml %>%
+  select(year, country, aml_index) %>%
+  group_by(year) %>%
+  arrange(desc(aml_index)) %>%
+  slice_head(n = 10) %>%
+  ungroup() %>%
+    mutate(year = as.factor(year),
+          country = reorder_within(country, aml_index, year)) %>%
+  ggplot(aes(country, aml_index)) +
+  geom_segment(aes(x=country, 
+                   xend=country, 
+                   y=0, 
+                   yend=aml_index),
+                   color = "#db504a",
+                    size = 1)  + 
+  geom_point(size = 5, color = "#db504a") +
+  coord_flip() +
+  facet_wrap(~ year, scales = "free") +
+  scale_x_reordered() +
+  ggthemes::theme_fivethirtyeight() +
+  labs(title = "Countries with highest AML risk, 2012-2020",
+       subtitle = "Developing world takes the lead, \n developed - absent") +
+   theme(legend.position = "none",
+         plot.background = element_blank(),    # Background of the entire plot
+  panel.background = element_blank(),
+  strip.background =element_blank(),
+         axis.text.x = element_text(face = "bold"),
+         text = element_text(family = "Georgia", color = "black", size = 18),
+  plot.title = element_text(family="Georgia",
+                            color = "#db504a",
+                            size=12,
+                            face = "bold",
+                            hjust = 0.5),
+   plot.subtitle = ggplot2::element_text(family="Georgia", 
+                                         size=20,
+                                         hjust = 0.5))
+```
+
+
+```{r}
+
+## PLOT 2
+
+wide_complete <- complete_aml %>%
+   pivot_wider(names_from = year, 
+               values_from = aml_index, 
+               names_prefix = "y") %>%
+  mutate(across(starts_with("y"), as.numeric)) %>%
+        mutate(d2016 = (y2016 - y2012) * 100,
+         d2020 = (y2020 - y2016) * 100) %>%
+  pivot_longer(c("d2016", "d2020"),
+               names_to = "change",
+               values_to = "percent")
+
+p2 <- wide_complete %>%
+  mutate(change = fct_recode(change,"2012 - 2016" = "d2016",
+                             "2016 - 2020" = "d2020"),
+         phill = if_else(country %in% c("Belgium", "Estonia", "Slovenia", "France", "Sweden", "Hungary", "Romania"), 
+                        "#db504a", "#dddddd")) %>%
+  group_by(change) %>%
+  arrange(desc(percent)) %>%
+  slice_head(n = 15) %>%
+  ungroup() %>%
+  mutate(change = as.factor(change),
+          country = reorder_within(country, percent, change)) %>%
+  ggplot(aes(country, percent, color = phill)) +
+  geom_segment(aes(x=country, 
+                   xend=country, 
+                   color = phill,
+                   y=0, 
+                   yend=percent),
+                    size = 1)  + 
+  geom_point(size = 5) +
+  coord_flip() +
+  facet_wrap(~ change, scales = "free") +
+  scale_x_reordered() +
+  ggthemes::theme_fivethirtyeight() +
+  labs(title = "Countries with highest increase in AML risk (%), 2012-2020",
+       subtitle = "Sweden, France and Hungary \n among top 10") +
+  scale_color_manual(values = c("#db504a", "#7A7A7A")) +
+   theme(legend.position = "none",
+         plot.background = element_blank(),
+  panel.background = element_blank(),
+  strip.background =element_blank(),
+         axis.text.x = element_text(face = "bold"),
+         text = element_text(family = "Georgia", color = "black", size = 18),
+  plot.title = element_text(family="Georgia",
+                            color = "#db504a",
+                            size=12,
+                            face = "bold",
+                            hjust = 0.5),
+   plot.subtitle = ggplot2::element_text(family="Georgia", 
+                                         size=20,
+                                         hjust = 0.5))
+
+```
+
+
+```{r}
+## PLOT 3
+
+p3 <- complete_aml %>%
+    group_by(year, region) %>%
+    summarize(aml_index = mean(aml_index)) %>% 
+    ggplot(aes(year, aml_index, color = region)) +
+    geom_line(size = 1.5) +
+    ggthemes::theme_fivethirtyeight() +
+  scale_color_manual(values = c("#e3b505","#56a3a6","#f3712b","#5c944c","#084c61","#db504a","#8d99ae")) +
+    labs(title = "Evolution of global AML risks by regions, 2012 - 2020",
+         subtitle = "Mind the gap",
+         color = "") +
+     theme(plot.background = element_blank(), # Background of the entire plot
+    legend.background = element_blank(),
+    legend.key = element_blank(),
+    panel.background = element_blank(),
+    strip.background =element_blank(),
+           axis.text.x = element_text(face = "bold"),
+           text = element_text(family = "Georgia", color = "black", size = 18),
+    plot.title = element_text(family="Georgia",
+                              color = "#db504a",
+                              size=12,
+                              face = "bold",
+                              hjust = 0.5),
+     plot.subtitle = ggplot2::element_text(family="Georgia", 
+                                           size=20,
+                                           hjust = 0.5))
+```
+
+```{r}
+## PLOT 4
+
+p4 <- wide_complete %>%
+  drop_na() %>%
+  mutate(change = fct_recode(change,"2012 - 2016" = "d2016",
+                             "2016 - 2020" = "d2020"),
+         phill = if_else(country %in% c("Austria", "Croatia", "Spain", "Greece", "Belgium", "Estonia", "Slovenia", "France", "Sweden", "Hungary", "Romania"), 
+                        "#db504a", "#dddddd")) %>%
+  group_by(change) %>%
+  arrange(desc(percent)) %>%
+  slice_tail(n = 15) %>% 
+  ungroup() %>%
+  mutate(change = as.factor(change),
+          country = reorder_within(country, percent, change)) %>%
+  ggplot(aes(country, percent, color = phill)) +
+  geom_segment(aes(x=country, 
+                   xend=country, 
+                   color = phill,
+                   y=0, 
+                   yend=percent),
+                    size = 1)  + 
+  geom_point(size = 5) +
+  coord_flip() +
+  facet_wrap(~ change, scales = "free") +
+  scale_x_reordered() +
+  ggthemes::theme_fivethirtyeight() +
+  labs(title = "Countries with highest decrease in AML risk (%), 2012-2020",
+       subtitle = "Greece and Macedonia \n rocking non-stop ") +
+  scale_color_manual(values = c("#db504a", "#7A7A7A")) +
+   theme(legend.position = "none",
+         plot.background = element_blank(),
+  panel.background = element_blank(),
+  strip.background =element_blank(),
+         axis.text.x = element_text(face = "bold"),
+         text = element_text(family = "Georgia", color = "black", size = 18),
+  plot.title = element_text(family="Georgia",
+                            color = "#db504a",
+                            size=12,
+                            face = "bold",
+                            hjust = 0.5),
+   plot.subtitle = ggplot2::element_text(family="Georgia", 
+                                         size=20,
+                                         hjust = 0.5))
+
+
+ggsave(filename = "plot6.png", plot = p6, device='png', units = "cm",
+       width = 35, height = 25, dpi=900)
+ggsave(filename = "plot5.png", plot = p5, device='png', units = "cm",
+       width = 35, height = 25, dpi=900)
+ggsave(filename = "plot4.png", plot = p4, device='png', units = "cm",
+       width = 35, height = 25, dpi=900)
+ggsave(filename = "plot3.png", plot = p3, device='png', units = "cm",
+       width = 35, height = 15, dpi=900)
+ggsave(filename = "plot2.png", plot = p2, device='png', units = "cm",
+       width = 35, height = 25, dpi=900)
+ggsave(filename = "plot1.png", plot = p1, device='png', units = "cm",
+       width = 45, height = 30, dpi=900)
+
+```
+
+```{r}
+
+## PLOT 5 and PLOT 6
+
+install.packages("ggtext")
+library(ggtext)
+
+
+q2 <- wide_complete %>%
+  drop_na() %>%
+  mutate(change = fct_recode(change,"2012 - 2016" = "d2016",
+                             "2016 - 2020" = "d2020"),
+         increase = if_else(percent > 0, "increase", "decrease")) %>%
+  group_by(change) %>%
+  arrange(desc(percent)) %>%
+  slice_tail(n = 15) %>%
+  filter(change == "2012 - 2016")
+
+q1 <- wide_complete %>%
+  drop_na() %>%
+  mutate(change = fct_recode(change,"2012 - 2016" = "d2016",
+                             "2016 - 2020" = "d2020"),
+         increase = if_else(percent > 0, "increase", "decrease")) %>%
+  group_by(change) %>%
+  arrange(desc(percent)) %>%
+  slice_head(n = 15) %>%
+  filter(change == "2012 - 2016")
+
+
+q <- q2 %>%
+  rbind(q1)
+
+w2 <- wide_complete %>%
+  drop_na() %>%
+  mutate(change = fct_recode(change,"2012 - 2016" = "d2016",
+                             "2016 - 2020" = "d2020"),
+         increase = if_else(percent > 0, "increase", "decrease")) %>%
+  group_by(change) %>%
+  arrange(desc(percent)) %>%
+  slice_tail(n = 15) %>%
+  filter(change == "2016 - 2020")
+
+w1 <- wide_complete %>%
+  drop_na() %>%
+  mutate(change = fct_recode(change,"2012 - 2016" = "d2016",
+                             "2016 - 2020" = "d2020"),
+         increase = if_else(percent > 0, "increase", "decrease")) %>%
+  group_by(change) %>%
+  arrange(desc(percent)) %>%
+  slice_head(n = 15) %>%
+  filter(change == "2016 - 2020")
+
+w <- w2 %>%
+  rbind(w1)
+
+
+
+p5 <- q %>%  
+ungroup() %>%
+  mutate(change = as.factor(change),
+          country = reorder_within(country, percent, change)) %>%
+  ggplot(aes(country, percent, color = increase)) +
+  geom_segment(aes(x=country, 
+                   xend=country, 
+                   color = increase,
+                   y=0, 
+                   yend=percent),
+                    size = 1)  + 
+  geom_point(size = 5) +
+  coord_flip() +
+  scale_x_reordered() +
+  scale_y_continuous(breaks = c(-200, -150, -100, -50, 0, 50, 100, 150, 200)) +
+  ggthemes::theme_fivethirtyeight() +
+  labs(title = "Countries with highest <span style='color:#db504a'>increase</span> and <span style='color:#084c61'>decrease</span> in AML risk (%), 2012-2016",
+       subtitle = "Norway going down, \n Azerbaijan being the best") +
+  scale_color_manual(values = c("#084c61", "#db504a")) +
+   theme(legend.position = "none",
+         plot.background = element_blank(),
+  panel.background = element_blank(),
+  strip.background =element_blank(),
+         axis.text.x = element_text(face = "bold"),
+         text = element_text(family = "Georgia", color = "black", size = 18),
+  plot.title = element_markdown(family="Georgia",
+                            color = "#7A7A7A",
+                            size=12,
+                            face = "bold",
+                            hjust = 0.5),
+   plot.subtitle = ggplot2::element_text(family="Georgia", 
+                                         size=20,
+                                         hjust = 0.5))
+
+
+
+p6 <- w %>%  
+ungroup() %>%
+  mutate(change = as.factor(change),
+          country = reorder_within(country, percent, change)) %>%
+  ggplot(aes(country, percent, color = increase)) +
+  geom_segment(aes(x=country, 
+                   xend=country, 
+                   color = increase,
+                   y=0, 
+                   yend=percent),
+                    size = 1)  + 
+  geom_point(size = 5) +
+  coord_flip() +
+  scale_x_reordered() +
+  scale_y_continuous(breaks = c(-200, -150, -100, -50, 0, 50, 100, 150, 200)) +
+  ggthemes::theme_fivethirtyeight() +
+  labs(title = "Countries with highest <span style='color:#db504a'>increase</span> and <span style='color:#084c61'>decrease</span> in AML risk (%), 2016-2020",
+       subtitle = "Norway getting better, \n Yemen, Jordan, Haiti - not so lucky") +
+  scale_color_manual(values = c("#084c61", "#db504a")) +
+   theme(legend.position = "none",
+         plot.background = element_blank(),
+  panel.background = element_blank(),
+  strip.background =element_blank(),
+         axis.text.x = element_text(face = "bold"),
+         text = element_text(family = "Georgia", color = "black", size = 18),
+  plot.title = element_markdown(family="Georgia",
+                            color = "#7A7A7A",
+                            size=12,
+                            face = "bold",
+                            hjust = 0.5),
+   plot.subtitle = ggplot2::element_text(family="Georgia", 
+                                         size=20,
+                                         hjust = 0.5))
+
+
+
+
+```
+
