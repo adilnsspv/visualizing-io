@@ -1,0 +1,343 @@
+---
+title: "Digital Rights"
+author: "ADIL NUSSIPOV"
+date: "2/25/2021"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(ggthemes)
+library(scales)
+library(ggalt)
+library(tidytext)
+library(ggtext)
+
+
+
+```
+
+
+```{r}
+d1 <- read_csv("/Users/vibefort/Desktop/R Markdowns/digitalrights/2020-rdr-index-02-summary-scores.csv")
+
+d2 <- read_csv("/Users/vibefort/Desktop/R Markdowns/digitalrights/2020-rdr-index-04-indicator-scores.csv")
+
+d3 <- read_csv("/Users/vibefort/Desktop/R Markdowns/digitalrights/2020-rdr-index-03-total-scores.csv")
+
+d4 <- read_csv("/Users/vibefort/Desktop/R Markdowns/digitalrights/2020-rdr-index-04-indicator-scores.csv")
+
+d5 <- read_csv("/Users/vibefort/Desktop/R Markdowns/digitalrights/2020-rdr-index-06-element-scores.csv")
+```
+
+
+```{r}
+d1 %>%
+  rename("Service" = "Serivce") %>%
+  filter(Company != "all companies",
+         !Class %in% c("Total", "Group")) %>%
+  mutate(Class = fct_recode(Class, "Social networking & blog" ="Twitter"))-> data
+
+
+
+## PLOT 1
+p1 <- d2 %>%
+  filter(Indicator %in% c("F05a", "F05b", "P07", "P10a",
+                          "P11a", "P11b", "P12", "P04",
+                          "P03a", "P05", "P10b",
+                          "F06", "F07"),
+         CompanyType == "Digital Platform",
+         Company != "VerizonMedia") %>%
+  mutate(Company = fct_reorder(Company, Score),
+         rescale = scales::rescale(Score),
+         type = if_else(Indicator %in% c("F05a", "F05b", "P07", "P10a",
+                          "P11a", "P11b", "P12",
+                           "P10b","F06", "F07"), "Req", "Non-Req")) %>%
+  ggplot(aes(Company, Indicator)) +
+  geom_tile(aes(alpha = rescale, fill = type), color = "white") +
+  scale_alpha(range = c(0.1, 1)) +
+  geom_text(aes(label = round(Score, 1),
+                size = 7),
+            family = "iA Writer Quattro S",
+            fontface = "bold") +
+  scale_fill_manual(values = c("#DB504A", "#457b9d")) +
+  #scale_fill_gradient(low = "#ffffff", 
+                      #high = "#DB504A") +
+  coord_flip() +
+  ggthemes::theme_fivethirtyeight() +
+  theme(legend.position = "none",
+         plot.background = element_blank(),    # Background of the entire plot
+  panel.background = element_blank(),
+  strip.background = element_blank(),
+  panel.grid.major.x = element_blank(),
+  panel.grid.major.y = element_blank(),
+  axis.text.y = element_text(family = "iA Writer Quattro S"),
+  axis.text.x = element_text(face = "bold",
+                             angle = 12,
+                             family = "iA Writer Quattro S"),
+  text = element_text(family = "iA Writer Duo S", 
+                             color = "black", 
+                             size = 18),
+  plot.title = element_text(family="iA Writer Quattro S",
+                            color = "#db504a",
+                            size=12,
+                            face = "bold",
+                            hjust = 0.5),
+ plot.subtitle = element_markdown(family="Georgia", 
+                                         size=20,
+                                         hjust = 0.5)) +
+  labs(title = "Corporate Policy Disclosure Indicators, %",
+       subtitle = "User Data <span style='color:#457b9d'>Requests</span> and <span style='color:#db504a'>Collection</span> Policies")
+
+
+```
+
+
+```{r}
+
+d1 %>%
+  filter(Class == "Total") %>%
+  pivot_longer(Governance:Privacy,
+               names_to = "type",
+               values_to = "type_score") %>%
+  filter(`Company Type` == "Digital Platform") %>%
+  mutate(Company = reorder_within(Company, type_score, type),
+         rescale = scales::rescale(type_score)) %>%
+  ggplot(aes(Company, type)) +
+  geom_tile(aes(alpha = rescale, fill = type), color = "white") +
+  scale_alpha(range = c(0.1, 1)) +
+  scale_x_reordered() +
+  geom_text(aes(label = round(type_score, 1),
+                size = 7),
+            family = "iA Writer Quattro S",
+            fontface = "bold") +
+  scale_fill_manual(values = c("#DB504A", "#457b9d", "#fca311")) +
+  #scale_fill_gradient(low = "#ffffff", 
+                      #high = "#DB504A") +
+  coord_flip() +
+  facet_wrap(~ type, scales = "free") +
+  ggthemes::theme_fivethirtyeight() +
+  theme(legend.position = "none",
+         plot.background = element_blank(),
+  panel.background = element_blank(),
+  strip.background = element_blank(),
+  strip.text.x = element_blank(),
+  panel.grid.major.x = element_blank(),
+  panel.grid.major.y = element_blank(),
+  axis.text.y = element_text(family = "iA Writer Quattro S"),
+  axis.text.x = element_text(face = "bold",
+                             family = "iA Writer Quattro S"),
+  text = element_text(family = "iA Writer Duo S", 
+                             color = "black", 
+                             size = 18),
+  plot.title = element_text(family="iA Writer Quattro S",
+                            color = "#db504a",
+                            size=12,
+                            face = "bold",
+                            hjust = 0.5),
+ plot.subtitle = element_markdown(family="Georgia", 
+                                         size=20,
+                                         hjust = 0.5)) +
+  labs(title = "Corporate Accountability Index, %",
+       subtitle = "How Digital Platforms Score on Digital Rights")
+  
+
+```
+
+```{r}
+## PLOT 2
+p2 <- d1 %>%
+  filter(Class == "Total") %>%
+  pivot_longer(Governance:Privacy,
+               names_to = "type",
+               values_to = "type_score") %>%
+  filter(`Company Type` == "Digital Platform") %>%
+  mutate(Company = reorder_within(Company, type_score, type)) %>%
+  mutate(total = 100) %>%
+  ggplot(aes(Company, type_score, group = type_score, fill = type)) +
+  geom_col(aes(y = total), fill = "#a8dadc") +
+  geom_col(aes(fill = type)) +
+  geom_text(aes(label = percent(round(type_score, 1), 
+                                scale = 1,
+                                accuracy = 1)),
+            hjust = -0.3, 
+             vjust = 0.4,
+            color = "white",
+            family = "iA Writer Quattro S",
+            size = 5,
+            fontface = "bold")+
+  scale_x_reordered() +
+  coord_flip() +
+  scale_fill_manual(values = c("#DB504A", "#457b9d", "#fca311")) +
+  facet_wrap(~ type, scales = "free") +
+  ggthemes::theme_fivethirtyeight() +
+  theme(legend.position = "none",
+         plot.background = element_blank(),
+  panel.background = element_blank(),
+  strip.background = element_blank(),
+  strip.text.x = element_text(face = "bold"),
+  panel.grid.major.x = element_blank(),
+  panel.grid.major.y = element_blank(),
+  axis.text.y = element_text(family = "iA Writer Quattro S"),
+  axis.text.x = element_blank(),
+  text = element_text(family = "iA Writer Duo S", 
+                             color = "black", 
+                             size = 18),
+  plot.title = element_text(family="iA Writer Quattro S",
+                            color = "#db504a",
+                            size=12,
+                            face = "bold",
+                            hjust = 0.5),
+ plot.subtitle = element_markdown(family="Georgia", 
+                                         size=20,
+                                         hjust = 0.5)) +
+  labs(title = "Corporate Accountability Index, %",
+       subtitle = "How Digital Platforms Score on Digital Rights")
+```
+
+
+
+```{r}
+
+data2 <- d1 %>%
+  rename("Service" = "Serivce") %>%
+  filter(`Company Type` == "Digital Platform",
+         !Class %in% c("Total", "Group"))
+
+
+## PLOT 3
+
+  
+  p3<- data2 %>%
+  mutate(Service = fct_recode(Service,
+                              "Samsung Android" = "Samsung implementation of Android",
+                              "Android" = "Android mobile ecosystem",
+                              "iOS" = "iOS (mobile ecosystem)",
+                              "Mail.Ru Cloud" = "Mail.Ru Cloud Solutions")) %>%
+  pivot_longer(Governance:Privacy,
+               names_to = "type",
+               values_to = "type_score") %>%
+  mutate(Service = reorder_within(Service, type_score, type))%>%
+  mutate(total = 100) %>%
+  ggplot(aes(Service, type_score, group = type_score, fill = type)) +
+  geom_col(aes(y = total), fill = "#a8dadc") +
+  geom_col(aes(fill = type)) +
+  geom_text(aes(label = percent(round(type_score, 1), 
+                                scale = 1,
+                                accuracy = 1)),
+            hjust = -0.3, 
+             vjust = 0.4,
+            color = "white",
+            family = "iA Writer Quattro S",
+            size = 4,
+            fontface = "bold")+
+  scale_x_reordered() +
+  coord_flip() +
+  scale_fill_manual(values = c("#DB504A", "#457b9d", "#fca311")) +
+  facet_wrap(~ type, scales = "free") +
+  ggthemes::theme_fivethirtyeight() +
+  theme(legend.position = "none",
+         plot.background = element_blank(),
+  panel.background = element_blank(),
+  strip.background = element_blank(),
+  strip.text.x = element_text(face = "bold"),
+  panel.grid.major.x = element_blank(),
+  panel.grid.major.y = element_blank(),
+  axis.text.y = element_text(family = "iA Writer Quattro S"),
+  axis.text.x = element_blank(),
+  text = element_text(family = "iA Writer Duo S", 
+                             color = "black", 
+                             size = 18),
+  plot.title = element_text(family="iA Writer Quattro S",
+                            color = "#db504a",
+                            size=12,
+                            face = "bold",
+                            hjust = 0.5),
+ plot.subtitle = element_markdown(family="Georgia", 
+                                         size=20,
+                                         hjust = 0.5)) +
+  labs(title = "Corporate Accountability Index, %",
+       subtitle = "How Digital Services Score on Digital Rights")
+
+
+
+```
+
+```{r}
+
+text_info <- (label = "\nF05A Government demands to restrict content or accounts;\nF06 Data about government demands to restrict for content and accounts;\nP03a Collection of user information")
+
+
++
+title <- c("Corporate Policy Disclosure Indicators, %","User Data <span style='color:#457b9d'>Requests</span> and <span style='color:#db504a'>Collection</span> Policies")
+
+
+p5 <- d2 %>%
+  filter(Indicator %in% c("F05a", "F05b", "P07", "P10a",
+                          "P11a", "P11b", "P12", "P04",
+                          "P03a", "P05", "P10b",
+                          "F06", "F07"),
+         CompanyType == "Digital Platform",
+         Company != "VerizonMedia") %>%
+  mutate(Company = fct_reorder(Company, Score),
+         rescale = scales::rescale(Score),
+         type = if_else(Indicator %in% c("F05a", "F05b", "P07", "P10a",
+                          "P11a", "P11b", "P12",
+                           "P10b","F06", "F07"), "Req", "Non-Req")) %>%
+  ggplot(aes(Indicator, Company)) +
+  geom_tile(aes(alpha = rescale, fill = type), color = "white") +
+  scale_alpha(range = c(0.1, 1)) +
+  geom_text(aes(label = round(Score, 1),
+                size = 7),
+            family = "iA Writer Quattro S",
+            fontface = "bold") +
+  scale_fill_manual(values = c("#DB504A", "#457b9d")) +
+  annotate("text",
+           y = 14,
+           x = 7,
+           label = c("F05a. Government demands to restrict content or accounts \nF05b. Private requests for content or account restriction \nF06. Data about government demands for restriction \nF07. Data about private requests for restriction \nP03a. Collection of user information \nP04. Sharing of user information \nP05. Purpose for collecting, inferring, and sharing user information \nP07. Users’ control over their own user information \nP10a. Government demands for user information \nP10b. Private requests for user information \nP11a. Data about government demands for user information \nP11b. Data about private requests for user information \nP12. Third-party requests for user information"),
+           size = 4,
+           family = "iA Writer Quattro S",
+           hjust = 0,
+           vjust = 0) +
+  #scale_fill_gradient(low = "#ffffff", 
+                      #high = "#DB504A") +
+  coord_cartesian(clip = "off") +
+  ggthemes::theme_fivethirtyeight() +
+  theme(legend.position = "none",
+        plot.background = element_blank(),
+        plot.margin = unit(c(5, 1, 1, 1), "cm"),
+  panel.background = element_blank(),
+  strip.background = element_blank(),
+  panel.grid.major.x = element_blank(),
+  panel.grid.major.y = element_blank(),
+  axis.text.y = element_text(family = "iA Writer Quattro S"),
+  axis.text.x = element_text(face = "bold",
+                             family = "iA Writer Quattro S"),
+  text = element_text(family = "iA Writer Duo S", 
+                             color = "black", 
+                             size = 18),
+  plot.title = element_text(family="iA Writer Quattro S",
+                            color = "#db504a",
+                            size=12,
+                            face = "bold",
+                            hjust = 0),
+ plot.subtitle = element_markdown(family="Georgia", 
+                                         size=30,
+                                         hjust = 0)) +
+  labs(title = "Corporate Policy Disclosure Indicators, %",
+       subtitle = "User Data <span style='color:#457b9d'>Requests</span><br> and
+       </br><span style='color:#db504a'>Collection</span> Policies")
+
+
+ggsave(filename = "plot1.png", plot = p5, device='png', units = "cm",
+       width = 35, height = 25, dpi=600)
+ggsave(filename = "plot2.png", plot = p1, device='png', units = "cm",
+       width = 35, height = 25, dpi=900)
+ggsave(filename = "plot3.png", plot = p2, device='png', units = "cm",
+       width = 35, height = 25, dpi=900)
+ggsave(filename = "plot4.png", plot = p3, device='png', units = "cm",
+       width = 35, height = 25, dpi=900)
+
+```
+
